@@ -1,0 +1,16 @@
+# Normalize line endings: LF in the repo for everything text.
+# The project is developed on macOS and built on Windows/Linux; modern .NET
+# and MSBuild handle LF-terminated sources fine, so a single convention avoids
+# noisy CRLF/LF diffs across platforms.
+* text=auto eol=lf
+
+# Shell scripts must stay LF even if checked out on Windows.
+*.sh text eol=lf
+
+# Common binary types git should never touch.
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.dylib binary
+*.so binary
+*.dll binary

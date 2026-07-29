@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+
+# Generated artist metadata (produced by `zunemd update`)
+artist_data/
+
+# Vendored native library — cloned separately, see README (LGPL-2.1, not redistributed here)
+vendor/XuneSyncLibrary/
+
+# MTPZ key blob — never commit (leaked key material; lives at ~/.mtpz-data)
+.mtpz-data
+*.mtpz-data
+
+# Session working-memory (local only)
+.ai/
+
+# OS / editor cruft
+.DS_Store

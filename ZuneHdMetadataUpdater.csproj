@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ZuneHdMetadataUpdater</RootNamespace>
+    <AssemblyName>zunemd</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="TagLibSharp" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="vendor/XuneSyncLibrary/build/libxune_sync.dylib"
+          Condition="Exists('vendor/XuneSyncLibrary/build/libxune_sync.dylib')"
+          Link="libxune_sync.dylib" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="vendor/XuneSyncLibrary/build/libxune_sync.so"
+          Condition="Exists('vendor/XuneSyncLibrary/build/libxune_sync.so')"
+          Link="libxune_sync.so" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Windows (Visual Studio generator): xune_sync.dll plus the vcpkg runtime DLLs
+         (libcrypto, libcurl, ...) that vcpkg's applocal deployment places beside it. -->
+    <None Include="vendor/XuneSyncLibrary/build/Release/*.dll"
+          Condition="Exists('vendor/XuneSyncLibrary/build/Release/xune_sync.dll')"
+          Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
