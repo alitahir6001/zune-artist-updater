@@ -58,6 +58,10 @@ dotnet build
 Notes:
 - Keep the default dynamic CRT (`/MD`). The C# resolver callback allocates strings on
   the ucrtbase heap for the DLL to `free()`; a static-CRT build would crash there.
+- **Build the native library `--config Release`, not Debug.** Debug implies `/MDd`, which
+  routes the DLL's `free()` to `ucrtbased.dll` while C# still allocates from
+  `ucrtbase.dll` — a different heap, so the first artist request corrupts it. Use
+  `zunemd serve --verbose` to debug instead of a Debug native build.
 - If `libwdi.lib` is present under `vendor/XuneSyncLibrary/vendor/libwdi/lib/x64`
   (it is vendored), the build also produces `build\Release\xune-driver-setup.exe`.
 
