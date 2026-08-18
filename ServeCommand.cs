@@ -35,7 +35,21 @@ internal static class ServeCommand
             return 1;
         }
 
+        // Registered before any device call: Ctrl+C during connect or the network-mode
+        // retries would otherwise kill the process before teardown can run. A second
+        // Ctrl+C falls through to default termination so a hung native call is escapable.
+        Console.CancelKeyPress += (_, e) => { e.Cancel = _running; _running = false; };
+
         var device = zune_device_create();
+        if (device == IntPtr.Zero)
+        {
+            Console.Error.WriteLine($"Could not create device handle: {LastError()}");
+            return 1;
+        }
+
+        var connected = false;
+        var interceptorStarted = false;
+        var networkUp = false;
         try
         {
             if (verbose)
@@ -53,6 +67,7 @@ internal static class ServeCommand
                 Console.Error.WriteLine("MTPZ keys are required (~/.mtpz-data or --mtpz PATH).");
                 return 1;
             }
+            connected = true;
 
             Console.WriteLine($"Connected: {Marshal.PtrToStringUTF8(zune_device_get_name(device))} " +
                               $"({Marshal.PtrToStringUTF8(zune_device_get_family_name(device))})");
@@ -89,10 +104,10 @@ internal static class ServeCommand
                 Console.Error.WriteLine($"Interceptor start failed ({rc}): {LastError()}");
                 return 1;
             }
+            interceptorStarted = true;
 
             Console.WriteLine("Establishing network mode (PPP over USB)...");
-            var networkUp = false;
-            for (var attempt = 1; attempt <= 10 && !networkUp; attempt++)
+            for (var attempt = 1; attempt <= 10 && !networkUp && _running; attempt++)
             {
                 networkUp = zune_device_trigger_network_mode(device);
                 if (!networkUp)
@@ -100,6 +115,11 @@ internal static class ServeCommand
                     Console.WriteLine($"  attempt {attempt}/10 failed, retrying...");
                     Thread.Sleep(500);
                 }
+            }
+            if (!_running)
+            {
+                Console.WriteLine("Interrupted.");
+                return 1;
             }
             if (!networkUp)
             {
@@ -110,18 +130,19 @@ internal static class ServeCommand
 
             Console.WriteLine("Network mode up. The Zune should now request artist metadata.");
             Console.WriteLine("Waiting for requests - press Ctrl+C to stop.");
-            Console.CancelKeyPress += (_, e) => { e.Cancel = true; _running = false; };
 
             PollLoop(device);
 
             Console.WriteLine("Stopping...");
-            zune_device_teardown_network_session(device);
-            zune_device_stop_artist_metadata_interceptor(device);
-            zune_device_disconnect(device);
             return 0;
         }
         finally
         {
+            // Clean-shutdown order, each step guarded so a failed gate still tears down
+            // instead of leaving the device connected or the interceptor running.
+            if (networkUp) zune_device_teardown_network_session(device);
+            if (interceptorStarted) zune_device_stop_artist_metadata_interceptor(device);
+            if (connected) zune_device_disconnect(device);
             zune_device_destroy(device);
         }
     }
@@ -160,6 +181,21 @@ internal static class ServeCommand
     /// </summary>
     private static IntPtr ResolvePath(IntPtr artistUuidPtr, IntPtr endpointTypePtr, IntPtr resourceIdPtr, IntPtr _)
     {
+        // Nothing may escape into native frames - the runtime can't unwind through them
+        // and would kill the process. 404 is the correct fallback anyway.
+        try
+        {
+            return Resolve(artistUuidPtr, endpointTypePtr, resourceIdPtr);
+        }
+        catch (Exception e)
+        {
+            try { Console.Error.WriteLine($"  resolver error: {e.Message}"); } catch { /* stdout gone */ }
+            return IntPtr.Zero;
+        }
+    }
+
+    private static IntPtr Resolve(IntPtr artistUuidPtr, IntPtr endpointTypePtr, IntPtr resourceIdPtr)
+    {
         var uuid = (Marshal.PtrToStringUTF8(artistUuidPtr) ?? "").ToLowerInvariant();
         var endpoint = Marshal.PtrToStringUTF8(endpointTypePtr) ?? "";
         var resourceId = Marshal.PtrToStringUTF8(resourceIdPtr);
@@ -188,7 +224,8 @@ internal static class ServeCommand
         if (resourceId == null)
             return null;
         var parts = resourceId.ToLowerInvariant().Split('-');
-        if (parts.Length < 2 || !int.TryParse(parts[1], out var num))
+        // An empty prefix would StartsWith-match the first artist dir and serve the wrong image.
+        if (parts.Length < 2 || parts[0].Length == 0 || !int.TryParse(parts[1], out var num))
             return null;
 
         var dir = Directory.EnumerateDirectories(_dataDir)
