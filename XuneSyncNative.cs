@@ -139,9 +139,14 @@ internal static partial class XuneSyncNative
     [DllImport(Lib)] [return: MarshalAs(UnmanagedType.I1)]
     public static extern bool zune_device_teardown_network_session(IntPtr handle);
 
+    /// <summary>
+    /// The library only ever sets its last-error string in zune_mtp_send_object, so every
+    /// serve-path failure returns "" (non-null). Real detail comes from the log callback.
+    /// </summary>
     public static string LastError()
     {
         var ptr = zune_get_last_error();
-        return ptr == IntPtr.Zero ? "(no error detail)" : Marshal.PtrToStringUTF8(ptr) ?? "(no error detail)";
+        var msg = ptr == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(ptr);
+        return string.IsNullOrEmpty(msg) ? "(no detail - re-run with --verbose)" : msg;
     }
 }
