@@ -7,6 +7,15 @@ namespace ZuneHdMetadataUpdater;
 /// </summary>
 internal static class UpdateCommand
 {
+    /// <summary>MusicBrainz search confidence below which we refuse to write an MBID.</summary>
+    private const int MinMatchScore = 90;
+
+    private static readonly HashSet<string> CompilationArtists = new(StringComparer.OrdinalIgnoreCase)
+        { "Various Artists", "Various", "VA", "Various Composers", "Soundtrack", "Original Soundtrack", "Unknown Artist" };
+
+    private static bool IsCompilation(string? artist) =>
+        artist != null && CompilationArtists.Contains(artist.Trim());
+
     public static async Task<int> Run(string musicFolder, string dataDir)
     {
         if (!Directory.Exists(musicFolder))
@@ -32,6 +41,8 @@ internal static class UpdateCommand
         // artist name -> resolved match (null = lookup failed, don't retry)
         var resolved = new Dictionary<string, MusicBrainzClient.ArtistMatch?>(StringComparer.OrdinalIgnoreCase);
         var fetchedMbids = new HashSet<string>();
+        var written = 0;
+        var reused = 0;
         var failures = 0;
 
         foreach (var file in files)
@@ -50,11 +61,21 @@ internal static class UpdateCommand
 
             using (tagFile)
             {
-                var artist = tagFile.Tag.FirstAlbumArtist ?? tagFile.Tag.FirstPerformer;
+                // On compilations the album artist is a placeholder; the track performer
+                // is the real artist, and it's the artist the device's card is about.
+                var artist = tagFile.Tag.FirstAlbumArtist;
+                if (string.IsNullOrWhiteSpace(artist) || IsCompilation(artist))
+                    artist = tagFile.Tag.FirstPerformer;
                 if (string.IsNullOrWhiteSpace(artist))
                 {
                     artist = ArtistFromFilename(file);
                     Console.WriteLine($"  {Path.GetFileName(file)}: no artist tag, searching MusicBrainz for \"{artist}\"");
+                }
+                if (IsCompilation(artist))
+                {
+                    Console.Error.WriteLine($"  SKIP {Path.GetFileName(file)}: compilation placeholder artist (\"{artist}\")");
+                    failures++;
+                    continue;
                 }
 
                 if (!resolved.TryGetValue(artist, out var match))
@@ -69,11 +90,19 @@ internal static class UpdateCommand
                         Console.Error.WriteLine($"    lookup failed: {e.Message}");
                         match = null;
                     }
-                    resolved[artist] = match;
                     if (match == null)
                         Console.Error.WriteLine($"    no MusicBrainz match for \"{artist}\"");
+                    else if (match.Score < MinMatchScore)
+                    {
+                        // The top hit below this is usually a different artist, and a wrong
+                        // MBID gets written into the user's files - refuse rather than guess.
+                        Console.Error.WriteLine($"    low-confidence match for \"{artist}\": {match.Name} " +
+                                                $"(score {match.Score}) - skipped, tag it manually if that's right");
+                        match = null;
+                    }
                     else
-                        Console.WriteLine($"    -> {match.Name} ({match.Mbid})");
+                        Console.WriteLine($"    -> {match.Name} ({match.Mbid}, score {match.Score})");
+                    resolved[artist] = match;
                 }
 
                 if (match == null)
@@ -84,21 +113,51 @@ internal static class UpdateCommand
 
                 if (tagFile.Tag.MusicBrainzArtistId != match.Mbid)
                 {
-                    tagFile.Tag.MusicBrainzArtistId = match.Mbid;
-                    tagFile.Save();
-                    Console.WriteLine($"  {Path.GetFileName(file)}: wrote MBID to ID3 tag");
+                    try
+                    {
+                        tagFile.Tag.MusicBrainzArtistId = match.Mbid;
+                        tagFile.Save();
+                        Console.WriteLine($"  {Path.GetFileName(file)}: wrote MBID to ID3 tag");
+                    }
+                    catch (Exception e)
+                    {
+                        // Read-only, or held open by the Zune desktop software.
+                        Console.Error.WriteLine($"  SKIP {Path.GetFileName(file)}: cannot write tag ({e.Message})");
+                        failures++;
+                        continue;
+                    }
                 }
 
                 if (fetchedMbids.Add(match.Mbid))
                 {
+                    // tracks.xml is written last, so its presence means a previous run
+                    // finished this artist - skip the ~3 API calls and re-download.
+                    if (File.Exists(Path.Combine(dataDir, match.Mbid.ToLowerInvariant(), "tracks.xml")))
+                    {
+                        Console.WriteLine($"  {match.Name}: artist data already present, skipping");
+                        reused++;
+                        continue;
+                    }
+
                     Console.WriteLine($"  Fetching artist data for {match.Name}...");
-                    await fetcher.FetchAsync(dataDir, match.Mbid, match.Name, match.SortName);
+                    try
+                    {
+                        await fetcher.FetchAsync(dataDir, match.Mbid, match.Name, match.SortName);
+                        written++;
+                    }
+                    catch (Exception e)
+                    {
+                        // A transient MusicBrainz/Wikipedia error shouldn't end the run.
+                        Console.Error.WriteLine($"    fetch failed for {match.Name}: {e.Message}");
+                        failures++;
+                    }
                 }
             }
         }
 
         Console.WriteLine();
-        Console.WriteLine($"Done. {fetchedMbids.Count} artist(s) written to {dataDir}" +
+        Console.WriteLine($"Done. {written} artist(s) written to {dataDir}" +
+                          (reused > 0 ? $", {reused} already present" : "") +
                           (failures > 0 ? $", {failures} file(s) skipped" : ""));
         Console.WriteLine("Next: sync the music to the Zune HD, then run `zunemd serve` with the device connected.");
         return 0;
