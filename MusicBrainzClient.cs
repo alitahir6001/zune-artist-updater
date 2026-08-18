@@ -12,7 +12,8 @@ internal sealed class MusicBrainzClient
 
     public MusicBrainzClient(HttpClient http) => _http = http;
 
-    public record ArtistMatch(string Mbid, string Name, string SortName);
+    /// <summary>Score is MusicBrainz's 0-100 search confidence; callers decide the threshold.</summary>
+    public record ArtistMatch(string Mbid, string Name, string SortName, int Score);
 
     public async Task<ArtistMatch?> SearchArtistAsync(string name)
     {
@@ -25,7 +26,8 @@ internal sealed class MusicBrainzClient
         return new ArtistMatch(
             a.GetProperty("id").GetString()!,
             a.GetProperty("name").GetString()!,
-            a.TryGetProperty("sort-name", out var sn) ? sn.GetString()! : a.GetProperty("name").GetString()!);
+            a.TryGetProperty("sort-name", out var sn) ? sn.GetString()! : a.GetProperty("name").GetString()!,
+            a.TryGetProperty("score", out var sc) ? sc.GetInt32() : 0);
     }
 
     /// <summary>Returns url-relation targets keyed by relation type (wikidata, wikipedia, ...).</summary>
