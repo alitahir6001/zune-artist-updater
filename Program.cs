@@ -10,7 +10,25 @@ internal static class Program
             return 1;
         }
 
-        var dataDir = GetOption(args, "--data-dir") ?? Path.Combine(Environment.CurrentDirectory, "artist_data");
+        string? dataDirOpt, mtpzOpt;
+        try
+        {
+            if (UnknownOption(args) is { } bad)
+            {
+                Console.Error.WriteLine($"Unknown option: {bad}");
+                PrintUsage();
+                return 1;
+            }
+            dataDirOpt = GetOption(args, "--data-dir");
+            mtpzOpt = GetOption(args, "--mtpz");
+        }
+        catch (ArgumentException e)
+        {
+            Console.Error.WriteLine(e.Message);
+            return 1;
+        }
+
+        var dataDir = dataDirOpt ?? Path.Combine(Environment.CurrentDirectory, "artist_data");
 
         switch (args[0])
         {
@@ -24,17 +42,41 @@ internal static class Program
                 return await UpdateCommand.Run(args[1], dataDir);
             }
             case "serve":
-                return ServeCommand.Run(dataDir, GetOption(args, "--mtpz"), args.Contains("--verbose"));
+                return ServeCommand.Run(dataDir, mtpzOpt, args.Contains("--verbose"));
             default:
                 PrintUsage();
                 return 1;
         }
     }
 
+    private static readonly string[] ValueFlags = ["--data-dir", "--mtpz"];
+    private static readonly string[] BoolFlags = ["--verbose"];
+
     private static string? GetOption(string[] args, string name)
     {
         var i = Array.IndexOf(args, name);
-        return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+        if (i < 0)
+            return null;
+        // Without this, `serve --mtpz --verbose` would use "--verbose" as the key path
+        // and then report the far more confusing "MTPZ keys are required".
+        if (i + 1 >= args.Length || args[i + 1].StartsWith("--"))
+            throw new ArgumentException($"{name} requires a value");
+        return args[i + 1];
+    }
+
+    /// <summary>A typo'd `--verbose` would otherwise run silently with no diagnostics.</summary>
+    private static string? UnknownOption(string[] args)
+    {
+        for (var i = 1; i < args.Length; i++)
+        {
+            if (!args[i].StartsWith("--"))
+                continue;
+            if (!ValueFlags.Contains(args[i]) && !BoolFlags.Contains(args[i]))
+                return args[i];
+            if (ValueFlags.Contains(args[i]))
+                i++;
+        }
+        return null;
     }
 
     private static void PrintUsage()
