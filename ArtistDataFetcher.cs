@@ -145,7 +145,9 @@ internal sealed class ArtistDataFetcher
         try
         {
             var bytes = await _http.GetByteArrayAsync(url);
-            if (bytes.Length < 1024)
+            // Reject non-JPEG payloads (an HTML error page behind a .jpg URL would
+            // otherwise be saved as the background and just render blank on device).
+            if (bytes.Length < 1024 || bytes[0] != 0xFF || bytes[1] != 0xD8 || bytes[2] != 0xFF)
                 return false;
             await File.WriteAllBytesAsync(path, bytes);
             return true;
