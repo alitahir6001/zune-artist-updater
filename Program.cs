@@ -43,6 +43,8 @@ internal static class Program
             }
             case "serve":
                 return ServeCommand.Run(dataDir, mtpzOpt, args.Contains("--verbose"));
+            case "artists":
+                return ArtistsCommand.Run(dataDir, mtpzOpt, args.Contains("--verbose"));
             default:
                 PrintUsage();
                 return 1;
@@ -94,6 +96,10 @@ internal static class Program
                   Connect to a Zune HD over USB and serve the artist data when the
                   device requests /v3.0/en-US/music/artist/{mbid}/... URLs.
                   --mtpz points at the MTPZ keys file (default: ~/.mtpz-data).
+
+              zunemd artists [--data-dir DIR] [--mtpz PATH] [--verbose]
+                  Connect to a Zune over USB and list every artist on it with the ID
+                  the device holds for that artist. Read-only.
 
             Typical flow: plug in the Zune HD, run `zunemd update ~/Music`, sync the
             music, then `zunemd serve` and let the device fetch artist metadata.
