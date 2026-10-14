@@ -102,6 +102,7 @@ Zune's firmware or storage.
   to have with Microsoft's servers. A malformed answer just means a failed fetch or a
   blank artist page; if the device ever seems stuck, reboot it (hold power + the media
   button) and it's back to normal.
+- **`artists` only reads.** It fetches the device's library listing and prints it.
 - **`update` modifies files on your PC, not the device** — it rewrites ID3 tags in your
   MP3s to add MusicBrainz IDs. **Back up your music folder before the first `update`
   run.** The device needs no backup; its music all came from your PC anyway.
@@ -111,15 +112,25 @@ Zune's firmware or storage.
 
 ## 4. Test flow
 
+Read the device before touching your music files. Neither `artists` nor `serve` has been
+confirmed against a real device yet.
+
 ```powershell
-# 1. Tag MBIDs and download bios/images into .\artist_data
-dotnet run -- update C:\Users\you\Music
+# 1. Swap to WinUSB (step 3 above), plug the Zune HD in, and list the artists on it with
+#    the ID the device holds for each. Read-only.
+dotnet run -- artists --verbose
 
-# 2. Sync the music itself with the Zune desktop app (original Zune driver active)
+# 2. Restore the Zune driver. Tag and fetch ONE artist that has no card, then sync that
+#    artist with the Zune desktop app.
+dotnet run -- update "C:\Users\you\Music\Some Artist"
 
-# 3. Swap to WinUSB (step 3 above), plug the Zune HD in, then:
+# 3. Swap to WinUSB again, then:
 dotnet run -- serve --verbose
 ```
+
+The Zune only asks for a card when it holds an ID for the artist, and `serve` can only
+answer when a folder with that same ID exists. Step 1 shows whether that holds before
+step 2 rewrites any tags.
 
 Watch for `GET biography/images/... -> <file>` lines; `progress=100 phase=4 status=3`
 means the device finished fetching. Disconnect and open the artist on the device.
