@@ -63,6 +63,9 @@ dotnet run -- update ~/Music
 
 # 3. Plug in the ZuneHD and serve the metadata
 dotnet run -- serve --verbose
+
+# Any time: list the artists on the device and the ID it holds for each (read-only)
+dotnet run -- artists
 ```
 
 While `serve` is running, the ZuneHD thinks it's talking to Zune.net: it asks for each
@@ -85,7 +88,7 @@ recreation, which is the shape the ZuneHD firmware is known to accept.
 
 ## Known caveats
 
-- The `serve` path hasn't been confirmed against a real device yet — `update` has.
+- Neither `serve` nor `artists` has been confirmed against a real device yet — `update` has.
 - Wikipedia's photos are sometimes large progressive JPEGs. The firmware is believed to
   handle them, but if a background comes up blank, drop a baseline JPEG named `1.jpg` into
   that artist's folder and re-run `serve`.
