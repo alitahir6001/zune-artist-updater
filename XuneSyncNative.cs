@@ -5,8 +5,8 @@ using System.Text;
 namespace ZuneHdMetadataUpdater;
 
 /// <summary>
-/// P/Invoke bindings for XuneSyncLibrary (libxune_sync). Only the functions the
-/// serve command needs. See vendor/XuneSyncLibrary/include/xune_sync/xune_sync_api.h.
+/// P/Invoke bindings for XuneSyncLibrary (libxune_sync). Only the functions the serve
+/// and artists commands need. See vendor/XuneSyncLibrary/include/xune_sync/xune_sync_api.h.
 /// </summary>
 internal static partial class XuneSyncNative
 {
@@ -56,6 +56,27 @@ internal static partial class XuneSyncNative
         public IntPtr proxy_mix_server;
         public int proxy_timeout_ms;
         public IntPtr server_ip;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct ZuneMusicArtist
+    {
+        public IntPtr name;
+        public IntPtr filename;
+        public IntPtr guid;
+        public uint atom_id;
+    }
+
+    // Leading fields of ZuneMusicLibrary only - nothing past artist_count is read.
+    [StructLayout(LayoutKind.Sequential)]
+    public struct ZuneMusicLibraryHead
+    {
+        public IntPtr tracks;
+        public uint track_count;
+        public IntPtr albums;
+        public uint album_count;
+        public IntPtr artists;
+        public uint artist_count;
     }
 
     // MEMORY CONTRACT (see header): return a malloc-compatible string the C++ side
@@ -138,6 +159,10 @@ internal static partial class XuneSyncNative
 
     [DllImport(Lib)] [return: MarshalAs(UnmanagedType.I1)]
     public static extern bool zune_device_teardown_network_session(IntPtr handle);
+
+    // Read-only library fetch. The result is native-owned: release it with the free call.
+    [DllImport(Lib)] public static extern IntPtr zune_device_get_music_library(IntPtr handle);
+    [DllImport(Lib)] public static extern void zune_device_free_music_library(IntPtr library);
 
     /// <summary>
     /// The library only ever sets its last-error string in zune_mtp_send_object, so every
