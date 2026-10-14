@@ -35,7 +35,7 @@ names are lowercased and matched lowercase.
 
 ## The P/Invoke boundary (XuneSyncNative.cs)
 
-- Bindings are hand-written for **only** the functions `serve` needs; the header
+- Bindings are hand-written for **only** the functions `serve` and `artists` need; the header
   `vendor/XuneSyncLibrary/include/xune_sync/xune_sync_api.h` is the source of truth.
   The library also exposes upload/erase/firmware-adjacent APIs — deliberately unbound
   (see `zunemd-change-control` rule 8).
