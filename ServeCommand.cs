@@ -16,8 +16,11 @@ internal static class ServeCommand
     // Keep delegate instances alive for the lifetime of the interceptor - the native
     // side stores the raw function pointers.
     private static readonly PathResolverCallback ResolverDelegate = ResolvePath;
-    private static readonly LogCallback LogDelegate = msg =>
-        Console.WriteLine($"  [xune] {Marshal.PtrToStringUTF8(msg)}");
+    // Guarded like ResolvePath: an exception escaping into native frames kills the process.
+    internal static readonly LogCallback LogDelegate = msg =>
+    {
+        try { Console.WriteLine($"  [xune] {Marshal.PtrToStringUTF8(msg)}"); } catch { /* stdout gone */ }
+    };
 
     public static int Run(string dataDir, string? mtpzPath, bool verbose)
     {
