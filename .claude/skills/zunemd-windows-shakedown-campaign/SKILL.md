@@ -65,10 +65,30 @@ GATE — expected output: `Data directory not found: ...` (if no artist_data yet
 - Crash/access violation already at this stage → record exact output; this is a
   finding (hypothesis C below), not a config error.
 
+## Phase 2b — Read the device first (`artists`; UNVERIFIED on device, added 2026-10-13)
+
+Do Phase 4 (driver swap) now, then:
+
+```powershell
+dotnet run -- artists --verbose | Tee-Object -FilePath artists-run1.log
+```
+
+GATE: `Connected: <name> (<family>)`, a table of artists, then
+`N artist(s): X with an ID, Y without.` Failure branches: `No Zune device detected` /
+`USB connect failed` → same as 5b/5c; `MTPZ keys not found` → fix the key path;
+`Could not read the device library` → capture the verbose log.
+
+**Stop and decide from this output before Phase 3.** The device only requests a card for
+an artist it holds an ID for, and nothing yet shows the Zune desktop app carries the
+`MusicBrainz Artist Id` tag to the device. The user's Zune already shows cards for most
+artists (user, 2026-10-13), so scope Phase 3 to ONE artist folder that has no card.
+Phase 3's sync needs the original Zune driver: restore it (Phase 6 command), sync, then
+repeat Phase 4 before Phase 5.
+
 ## Phase 3 — Data + music
 
 ```powershell
-dotnet run -- update C:\Users\<you>\Music     # back up the music folder first (rewrites ID3 tags)
+dotnet run -- update "C:\Users\<you>\Music\<one artist>"     # back up that folder first (rewrites ID3 tags)
 ```
 
 GATE: `Done. N artist(s) written to ...artist_data` with N ≥ 1, and per-artist
