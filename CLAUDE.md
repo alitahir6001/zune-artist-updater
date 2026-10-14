@@ -11,7 +11,8 @@
 A .NET 8 CLI (`zunemd`) that restores the ZuneHD artist-card experience (biography +
 background images) by replacing the dead Zune.net backend. `update` tags MP3s with
 MusicBrainz IDs and downloads artist data; `serve` answers the device's catalog
-requests over USB via the vendored XuneSyncLibrary. Detailed, verified skills live in
+requests over USB via the vendored XuneSyncLibrary; `artists` lists the device's artists
+and the ID it holds for each (read-only). Detailed, verified skills live in
 `.claude/skills/` — read those before editing. Read `.ai/` for live state.
 
 ## Stack
@@ -57,6 +58,7 @@ headers on 2026-08-15 and matches exactly — treat it as verified, not suspect.
 8. **Nothing may throw out of `ResolvePath`** (ServeCommand.cs) — it's a reverse P/Invoke callback and the runtime can't unwind through native frames, so an escaped exception kills the process. It's wrapped in try/catch returning `IntPtr.Zero` (= 404, the correct fallback); keep it that way, including the guard on its own logging call.
 9. **`ZuneXml.Images` hardcodes `<width>1000</width><height>1000</height>` for every image**, but the actual file's size varies by source. It's true only by coincidence when the image came from Deezer (`picture_xl` is always 1000×1000) and wrong whenever Wikipedia supplied it. **A second candidate explanation for the blank-background caveat README blames on progressive JPEGs** — untested either way. Contract-bound (gotcha 6): needs device proof, not a reasoned fix.
 10. **MusicBrainz 503s are routine, not a bug** — two hit during ~10 min of testing on 2026-08-15 with the rate budget nearly untouched (1177/1200). `update` survives them and reports accurately; re-run to fill gaps, which is cheap now that it resumes (skips any artist whose `tracks.xml` exists). Don't "fix" this by reducing request spacing.
+11. **The artist-ID chain is unproven, and it gates everything.** The device only requests a card for an artist it holds an ID for (MTP prop 0xDA97, set by whatever synced the track). Nothing shows the Zune desktop app copies the `MusicBrainz Artist Id` tag there; Xune's uploader does read it. The user's Zune already shows cards for most artists (user, 2026-10-13), so it likely holds old Zune-catalog IDs — unverified. Run `artists` before `update`, and scope `update` to artists missing a card.
 
 ## Conventions / what NOT to do
 - **Read `.claude/skills/` first.** `zunemd-change-control` gates changes; don't route around it. Don't duplicate facts the skills already own.
@@ -69,6 +71,7 @@ headers on 2026-08-15 and matches exactly — treat it as verified, not suspect.
 - **Device-affecting changes need real-device proof**, not just a green `dotnet build`.
 
 ## Recent context (last few sessions)
+- **2026-10-13 (session 4):** Full review (all C# + the native serve path). Added the read-only `artists` command (2 new bindings, 23 total, none destructive; struct layout checked via `offsetof`, marshalling checked off-device, **not device-verified**) and guarded `LogDelegate`. XML templates match the reference server string-for-string, including the hardcoded 1000×1000, so gotcha 9 is faithful to it. Found, not yet acted on: `update` overwrites existing/multi-value MBID tags; a swallowed fetch error leaves a permanent placeholder (resume marker); no `--dry-run`; the reference re-encodes every image and serves a 160×120 thumb where we serve raw bytes. Changes uncommitted at session end.
 <!-- Small/single-purpose projects can skip this — .ai/backlog.md already covers it. -->
 - **2026-08-15 (session 3):** Pre-shakedown hardening + `update` enhancements (resume, match-score floor, compilation fallback, JPEG magic-byte check, CLI flag validation). Audited the P/Invoke boundary against the vendored headers — **no ABI or signature mismatch**, struct layout verified via `offsetof`; don't re-derive it. Verified `update` end-to-end on real MP3s and the no-brick claim by enumerating the 21 bound natives (zero destructive). Surfaced gotchas 7–10 and corrected the unfounded "macOS path working" status. Changes uncommitted at session end.
 - **2026-07-12 (session 2):** Built the `.claude/skills/` library (6 skills + 2 verified diagnostic scripts) and scaffolded `.ai/` + this file. No source changes. Windows first-device `serve` run remains the open task.
