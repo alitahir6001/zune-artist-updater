@@ -56,16 +56,16 @@ don't matter — `libxune_sync` itself builds, and that's the only piece used he
 ## Usage
 
 ```bash
-# 1. Scan your music, tag it, download bios and images into ./artist_data
+# 1. Plug in the ZuneHD and list its artists and the ID it holds for each (read-only)
+dotnet run -- artists
+
+# 2. Scan your music, tag it, download bios and images into ./artist_data
 dotnet run -- update ~/Music
 
-# 2. Sync the music itself (Zune desktop or Xune) — not this tool
+# 3. Sync the music itself (Zune desktop or Xune) — not this tool
 
-# 3. Plug in the ZuneHD and serve the metadata
+# 4. Plug in the ZuneHD and serve the metadata
 dotnet run -- serve --verbose
-
-# Any time: list the artists on the device and the ID it holds for each (read-only)
-dotnet run -- artists
 ```
 
 While `serve` is running, the ZuneHD thinks it's talking to Zune.net: it asks for each
