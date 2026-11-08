@@ -1,9 +1,4 @@
-<!-- Durable, project-specific knowledge for the agent. Auto-loaded every session.
-     Maintenance: permanent facts only (ephemeral state -> .ai/handoff.md); add gotchas as
-     you hit them and never delete them (compress instead); update "Recent context" at
-     session end. Soft cap ~200-250 lines, ideally far less.
-     Read order at session start: this file -> .ai/rules.md -> .ai/current-task.md
-     -> .ai/handoff.md -> .ai/backlog.md. -->
+<!-- Durable project knowledge, auto-loaded every session. Permanent facts only: live state -> .ai/handoff.md, session history -> .ai/history.md. Gotchas are append-only (compress, never delete). Edit only when the user asks. -->
 
 # zunehd-artist-updater (zunemd)
 
@@ -13,7 +8,8 @@ background images) by replacing the dead Zune.net backend. `update` tags MP3s wi
 MusicBrainz IDs and downloads artist data; `serve` answers the device's catalog
 requests over USB via the vendored XuneSyncLibrary; `artists` lists the device's artists
 and the ID it holds for each (read-only). Detailed, verified skills live in
-`.claude/skills/` — read those before editing. Read `.ai/` for live state.
+`.claude/skills/` — read those before editing. Live state: `.ai/handoff.md`.
+Design decisions: docs/adr/ (index: docs/adr/README.md). Write new ones with the write-adr skill.
 
 ## Stack
 - .NET 8, C# (single project, no subdirs). One NuGet dep: TagLibSharp (ID3 tags).
@@ -40,7 +36,7 @@ covers grep-checked facts, not a device run, and README still hedges image accep
 2026-08-15 against real MP3s. So the open risk is two-layered: Windows USB plumbing on top
 of an XML/protocol layer nobody has confirmed a device accepts. Windows support wired up
 2026-07-02 (WinUSB, ucrtbase-malloc for the resolver callback, driver-swap docs); the
-shakedown is the current task (`.ai/current-task.md`, campaign skill). No tests, no CI. Now a git repo, published to
+shakedown is the active task (`.ai/handoff.md`, campaign skill). No tests, no CI. Now a git repo, published to
 github.com/alitahir6001/zune-artist-updater (public); the LGPL native lib is forked to
 github.com/alitahir6001/XuneSyncLibrary, pinned at c2a6eeb, and cloned into `vendor/`
 (gitignored) per the README. The P/Invoke boundary was fully audited against the vendored
@@ -48,7 +44,7 @@ headers on 2026-08-15 and matches exactly — treat it as verified, not suspect.
 
 ## Active gotchas
 <!-- Numbered, append-only. Never delete an entry — compress it instead if this grows long. -->
-1. **Windows resolver-callback strings must use ucrtbase `malloc` (`AllocFreeableUtf8`), never `Marshal.StringToCoTaskMemUTF8`.** Native side calls C `free()`; CoTaskMem is the COM heap on Windows → corruption. Corollary: native lib must keep the dynamic *release* CRT (`/MD`). A static-CRT build crashes in `free()`; a **Debug** build implies `/MDd`, whose `free()` uses `ucrtbased.dll` while C# allocates from `ucrtbase.dll` — same corruption, different cause. Always `cmake --build --config Release`.
+1. **Windows resolver-callback strings must use ucrtbase `malloc` (`AllocFreeableUtf8`), never `Marshal.StringToCoTaskMemUTF8`.** Native side calls C `free()`; CoTaskMem is the COM heap on Windows → corruption. Corollary: native lib must keep the dynamic *release* CRT (`/MD`). A static-CRT build crashes in `free()`; a **Debug** build implies `/MDd`, whose `free()` uses `ucrtbased.dll` while C# allocates from `ucrtbase.dll` — same corruption, different cause. Always `cmake --build --config Release`. Why: ADR-0005.
 2. **Native callback delegates must stay reachable** for the interceptor's lifetime — native stores raw fn pointers. Kept as `static readonly` fields in ServeCommand.cs. GC of a delegate = call into freed memory.
 3. **`artist_data/{mbid}/` folder names must be lowercase MBIDs**; serve lowercases the device's UUID before path lookup. Mismatch = 404 on device.
 4. **MusicBrainz match quality is the main corruption risk** — `limit=1` takes the top hit, so `update` now refuses below `MinMatchScore` (90) and falls back to the track performer when the album artist is a compilation placeholder. Loosening either re-opens silently writing a WRONG MBID into the user's files; the per-file guard prevents rewrites, not wrong writes.
@@ -69,10 +65,3 @@ headers on 2026-08-15 and matches exactly — treat it as verified, not suspect.
 - **Don't reduce MusicBrainz request spacing** (1.1s) or drop the User-Agent → IP ban.
 - **Don't commit/distribute `.mtpz-data`.** No firmware code paths (device-safety promise).
 - **Device-affecting changes need real-device proof**, not just a green `dotnet build`.
-
-## Recent context (last few sessions)
-- **2026-10-13 (session 4):** Full review (all C# + the native serve path). Added the read-only `artists` command (2 new bindings, 23 total, none destructive; struct layout checked via `offsetof`, marshalling checked off-device, **not device-verified**) and guarded `LogDelegate`. XML templates match the reference server string-for-string, including the hardcoded 1000×1000, so gotcha 9 is faithful to it. Found, not yet acted on: `update` overwrites existing/multi-value MBID tags; a swallowed fetch error leaves a permanent placeholder (resume marker); no `--dry-run`; the reference re-encodes every image and serves a 160×120 thumb where we serve raw bytes. Changes uncommitted at session end.
-<!-- Small/single-purpose projects can skip this — .ai/backlog.md already covers it. -->
-- **2026-08-15 (session 3):** Pre-shakedown hardening + `update` enhancements (resume, match-score floor, compilation fallback, JPEG magic-byte check, CLI flag validation). Audited the P/Invoke boundary against the vendored headers — **no ABI or signature mismatch**, struct layout verified via `offsetof`; don't re-derive it. Verified `update` end-to-end on real MP3s and the no-brick claim by enumerating the 21 bound natives (zero destructive). Surfaced gotchas 7–10 and corrected the unfounded "macOS path working" status. Changes uncommitted at session end.
-- **2026-07-12 (session 2):** Built the `.claude/skills/` library (6 skills + 2 verified diagnostic scripts) and scaffolded `.ai/` + this file. No source changes. Windows first-device `serve` run remains the open task.
-- **2026-07-02 (session 1):** Wired up Windows support (WinUSB, ucrtbase-malloc callback, DLL probing, driver-swap docs in WINDOWS.md). Full PPP-over-USB serve path on Windows untested.
