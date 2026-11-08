@@ -74,9 +74,11 @@ names are lowercased and matched lowercase.
 
 ## Known-weak points (stated plainly)
 
-- **First-hit MusicBrainz match.** `limit=1`, no score threshold, no confirmation.
-  Ambiguous names (e.g. bands sharing a name) can tag the wrong MBID into the user's
-  files. The per-file guard only prevents rewrites, not wrong writes.
+- **Top-hit MusicBrainz match.** `limit=1`; `update` refuses the hit below
+  `MinMatchScore` (90) and uses the track performer for compilation placeholders
+  (since d799a9b, see `docs/adr/0007-refuse-musicbrainz-matches-below-score-90.md`).
+  A wrong artist scoring 90+ still gets its MBID written; the per-file guard only
+  prevents rewrites, not wrong writes.
 - **Filename guessing** (`Artist - Title.mp3`, leading track numbers stripped) is a
   heuristic; wrong splits produce garbage lookups.
 - **MP3-only scan.** `*.mp3` glob; .m4a/.wma (which Zune supports) are ignored.
@@ -86,9 +88,10 @@ names are lowercased and matched lowercase.
 - **Keyless third-party APIs** (Wikipedia REST, Wikidata EntityData, Deezer) can
   change shape without notice; all failures degrade silently to placeholder bio /
   missing images by design (broad catches in ArtistDataFetcher.cs).
-- **No resume/state for `update`**: re-running is the retry mechanism; it re-fetches
-  nothing per file unless the MBID differs, but artist data is re-downloaded per run
-  (fetchedMbids is in-memory only). Cheap for small libraries; wasteful for huge ones.
+- **`update` resume is a file-presence check**: an artist whose `tracks.xml` exists
+  is skipped (written last, so it marks a finished fetch; since d799a9b). A fetch that
+  degraded silently (placeholder bio, no images) still writes `tracks.xml`
+  (ArtistDataFetcher.cs), so re-running won't retry it; delete the folder to refetch.
 - **Windows serve path untested on hardware** as of 2026-07-06 — the campaign skill
   `zunemd-windows-shakedown-campaign` exists to close exactly this.
 
